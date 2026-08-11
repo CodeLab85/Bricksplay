@@ -122,30 +122,41 @@ h2 {
     margin-bottom: 10px;
 }
 
-/* NEU: Das feste Kästchen für den Scanner */
+/* NEUES SCANNER CONTAINER STYLING */
 #scanner-container {
+    position: relative;
     width: 100%;
     max-width: 400px;
     margin: 20px auto;
     min-height: 350px;
-    background-color: #000000; /* Schwarzer Hintergrund */
-    border: 4px solid var(--bp-yellow); /* Fetter gelber Rahmen */
+    background-color: #000000;
+    border: 4px solid var(--bp-yellow);
     border-radius: 8px;
     overflow: hidden;
+    box-shadow: 0 8px 16px rgba(0,0,0,0.5);
     display: flex;
     justify-content: center;
     align-items: center;
-    box-shadow: 0 8px 16px rgba(0,0,0,0.5);
 }
 
-#reader {
+#scan-feedback {
+    position: absolute;
+    color: white;
+    font-weight: bold;
+    z-index: 1;
+    text-align: center;
+    padding: 20px;
+}
+
+#qr-video {
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
-}
-
-#reader video {
-    object-fit: cover !important;
-    width: 100% !important;
+    object-fit: cover;
+    z-index: 2;
+    display: none; /* Erst anzeigen, wenn Stream da ist */
 }
 
 .error { color: #ffcccc; font-weight: bold; margin-top: 10px; background: rgba(255,0,0,0.2); padding: 10px; }

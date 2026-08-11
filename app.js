@@ -19,7 +19,6 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// UI Elemente referenzieren
 const sections = {
     login: document.getElementById('login-section'),
     dashboard: document.getElementById('dashboard-section'),
@@ -27,7 +26,13 @@ const sections = {
     action: document.getElementById('product-action-section')
 };
 const nav = document.getElementById('main-nav');
-let html5QrcodeScanner = null;
+
+// JSQR VARIABLEN
+let video = document.getElementById("qr-video");
+let canvasElement = document.getElementById("qr-canvas");
+let canvas = canvasElement.getContext("2d", { willReadFrequently: true });
+let scanFeedback = document.getElementById("scan-feedback");
+let currentStream = null;
 let isScanning = false;
 
 function showSection(sectionName) {
@@ -68,72 +73,76 @@ onAuthStateChanged(auth, (user) => {
     else showSection('login');
 });
 
-// 5. NAVIGATION & SCANNER LOGIK
+// 5. NAVIGATION
 document.getElementById('btn-dashboard').addEventListener('click', () => { stopScanner(); showSection('dashboard'); });
 document.getElementById('btn-close-action').addEventListener('click', () => { showSection('dashboard'); });
-document.getElementById('btn-scan').addEventListener('click', () => { showSection('scanner'); startScanner(); });
+document.getElementById('btn-scan').addEventListener('click', () => { startScanner(); });
 document.getElementById('btn-cancel-scan').addEventListener('click', () => { stopScanner(); showSection('dashboard'); });
 
-function startScanner() {
-    if (isScanning) return;
-    
-    const readerDiv = document.getElementById('reader');
-    readerDiv.innerHTML = "<h3 style='color:white; padding: 30px; text-align: center;'>Kamera wird gestartet...</h3>";
-    
-    setTimeout(() => {
-        if (!html5QrcodeScanner) {
-            html5QrcodeScanner = new Html5Qrcode("reader");
-        }
-        
-        // WICHTIG: Kamera IDs auslesen, damit es auch am PC (Webcam) funktioniert!
-        Html5Qrcode.getCameras().then(devices => {
-            if (devices && devices.length) {
-                // Standard: Erste verfügbare Kamera (meist die Webcam am PC)
-                let cameraId = devices[0].id;
-                
-                // Auf dem Handy: Suche nach der Rückkamera
-                const backCamera = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('rück') || d.label.toLowerCase().includes('environment'));
-                if (backCamera) cameraId = backCamera.id;
 
-                html5QrcodeScanner.start(
-                    cameraId, // Wir nutzen die direkte ID statt "facingMode"
-                    { 
-                        fps: 15,
-                        qrbox: function(viewfinderWidth, viewfinderHeight) {
-                            let minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
-                            let qrboxSize = Math.floor(minEdgeSize * 0.75); 
-                            return { width: qrboxSize, height: qrboxSize };
-                        }
-                    },
-                    (decodedText) => {
-                        stopScanner();
-                        openProductAction(decodedText);
-                    },
-                    (errorMessage) => {}
-                ).then(() => {
-                    isScanning = true;
-                }).catch(err => {
-                    readerDiv.innerHTML = `<p style="color:red; font-weight:bold; padding:20px; background:white;">Kamera-Startfehler: ${err}</p>`;
-                });
-            } else {
-                readerDiv.innerHTML = `<p style="color:red; font-weight:bold; padding:20px; background:white;">Keine Kamera gefunden!</p>`;
-            }
-        }).catch(err => {
-            readerDiv.innerHTML = `<p style="color:red; font-weight:bold; padding:20px; background:white;">Kamera-Zugriff blockiert.</p>`;
+// 6. NEUER SCANNER (Nativ + jsQR)
+function startScanner() {
+    showSection('scanner');
+    isScanning = true;
+    scanFeedback.innerText = "Zugriff auf Kamera... Bitte erlauben.";
+    scanFeedback.style.display = "block";
+    video.style.display = "none";
+
+    // Greife auf die Rückkamera zu
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(function(stream) {
+        currentStream = stream;
+        video.srcObject = stream;
+        video.setAttribute("playsinline", true); // Apple Pflicht-Befehl
+        video.play();
+        requestAnimationFrame(tick);
+    }).catch(function(err) {
+        scanFeedback.innerText = "Fehler: Keine Kamera gefunden oder Zugriff verweigert.";
+        console.error("Camera Error:", err);
+    });
+}
+
+function tick() {
+    if (!isScanning) return; // Stoppe Loop, wenn abgebrochen
+
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        scanFeedback.style.display = "none";
+        video.style.display = "block";
+        
+        // Canvas an Videogröße anpassen
+        canvasElement.height = video.videoHeight;
+        canvasElement.width = video.videoWidth;
+        
+        // Videobild auf Canvas malen
+        canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+        var imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
+        
+        // Bilddaten an jsQR übergeben
+        var code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: "dontInvert",
         });
-    }, 400); 
+        
+        // Wenn QR Code gefunden:
+        if (code) {
+            stopScanner();
+            openProductAction(code.data);
+            return;
+        }
+    }
+    // Loop fortsetzen, solange kein Code gefunden wurde
+    requestAnimationFrame(tick);
 }
 
 function stopScanner() {
-    if (html5QrcodeScanner && isScanning) {
-        html5QrcodeScanner.stop().then(() => {
-            isScanning = false;
-            document.getElementById('reader').innerHTML = ""; 
-        }).catch(err => console.log("Fehler beim Stoppen", err));
+    isScanning = false;
+    if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop()); // Kamera abschalten
+        currentStream = null;
     }
+    video.srcObject = null;
+    video.style.display = "none";
 }
 
-// 6. DASHBOARD DATEN LADEN
+// 7. DASHBOARD DATEN LADEN
 async function loadDashboardData() {
     const listContainer = document.getElementById('product-list');
     listContainer.innerHTML = '<p>Lade Bestände...</p>';
@@ -171,7 +180,7 @@ async function loadDashboardData() {
 
 window.openProductAction = openProductAction;
 
-// 7. PRODUKT LADEN
+// 8. PRODUKT LADEN
 async function openProductAction(sku) {
     document.getElementById('action-sku').innerText = sku;
     showSection('action');
@@ -204,7 +213,7 @@ document.getElementById('btn-decrease').addEventListener('click', () => {
     stockInput.value = parseInt(stockInput.value || 0) - 1; 
 });
 
-// 8. PRODUKT SPEICHERN
+// 9. PRODUKT SPEICHERN
 document.getElementById('btn-save-product').addEventListener('click', async () => {
     const btn = document.getElementById('btn-save-product');
     btn.innerText = "Speichert...";

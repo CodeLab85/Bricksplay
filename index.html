@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bricksplay Lager</title>
-    <!-- CACHE BUSTER: ?v=2 zwingt den Browser, die neueste Version zu laden -->
-    <link rel="stylesheet" href="style.css?v=2">
-    <!-- QR Code Scanner -->
-    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <!-- CACHE BUSTER v4 -->
+    <link rel="stylesheet" href="style.css?v=4">
+    <!-- NEUE BIBLIOTHEK: jsQR (nur Logik, kein UI-Zwang) -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
 <body>
     <header>
@@ -35,17 +35,20 @@
         <section id="dashboard-section" class="hidden">
             <h2>Aktueller Bestand</h2>
             <div id="product-list" class="grid">
-                <p>Scanner nutzen, um Produkte zu laden...</p>
+                <p>Lade Daten...</p>
             </div>
         </section>
 
-        <!-- Scanner Section -->
+        <!-- Scanner Section (NEUER WEG: Hartcodiertes Video-Element für iOS) -->
         <section id="scanner-section" class="hidden">
             <h2>QR Code Scannen</h2>
             
-            <!-- HIER IST DAS FESTE KÄSTCHEN -->
             <div id="scanner-container">
-                <div id="reader"></div>
+                <div id="scan-feedback">Kamera wird geladen...</div>
+                <!-- WICHTIG FÜR iOS: playsinline und muted sind zwingend erforderlich! -->
+                <video id="qr-video" autoplay muted playsinline></video>
+                <!-- Verstecktes Canvas zum Analysieren der Bilder -->
+                <canvas id="qr-canvas" hidden></canvas>
             </div>
             
             <button id="btn-cancel-scan" class="secondary" style="margin-top: 20px;">Abbrechen</button>
@@ -72,7 +75,6 @@
         </section>
     </main>
     
-    <!-- App Logic mit Cache Buster -->
-    <script type="module" src="app.js?v=2"></script>
+    <script type="module" src="app.js?v=4"></script>
 </body>
 </html>
