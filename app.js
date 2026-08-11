@@ -2,7 +2,7 @@
 // 1. FIREBASE IMPORTE (Direkt via CDN für GitHub Pages)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 // 2. DEINE FIREBASE CONFIG
 const firebaseConfig = {
@@ -19,7 +19,6 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-
 // UI Elemente referenzieren
 const sections = {
     login: document.getElementById('login-section'),
@@ -29,6 +28,7 @@ const sections = {
 };
 const nav = document.getElementById('main-nav');
 let html5QrcodeScanner = null;
+let isScanning = false;
 
 function showSection(sectionName) {
     Object.values(sections).forEach(sec => sec.classList.remove('active'));
@@ -39,9 +39,13 @@ function showSection(sectionName) {
     } else {
         nav.classList.add('hidden');
     }
+
+    if(sectionName === 'dashboard') {
+        loadDashboardData();
+    }
 }
 
-// 4. AUTHENTIFIZIERUNG (Login/Logout)
+// 4. AUTHENTIFIZIERUNG
 document.getElementById('login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = document.getElementById('email').value;
@@ -54,52 +58,106 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
     } catch (error) {
         errorMsg.innerText = "Login fehlgeschlagen. E-Mail oder Passwort falsch.";
         errorMsg.classList.remove('hidden');
-        console.error("Login Fehler:", error);
     }
 });
 
-document.getElementById('btn-logout').addEventListener('click', () => {
-    signOut(auth);
-});
+document.getElementById('btn-logout').addEventListener('click', () => signOut(auth));
 
-// Listener: Prüft ob User eingeloggt ist oder nicht
 onAuthStateChanged(auth, (user) => {
-    if (user) {
-        showSection('dashboard');
-    } else {
-        showSection('login');
-    }
+    if (user) showSection('dashboard');
+    else showSection('login');
 });
 
-
-// 5. NAVIGATION & SCANNER LOGIK
+// 5. NAVIGATION & SCANNER LOGIK (GEFIXTE VERSION)
 document.getElementById('btn-dashboard').addEventListener('click', () => { stopScanner(); showSection('dashboard'); });
 document.getElementById('btn-close-action').addEventListener('click', () => { showSection('dashboard'); });
 document.getElementById('btn-scan').addEventListener('click', () => { showSection('scanner'); startScanner(); });
 document.getElementById('btn-cancel-scan').addEventListener('click', () => { stopScanner(); showSection('dashboard'); });
 
 function startScanner() {
-    if (!html5QrcodeScanner) html5QrcodeScanner = new Html5Qrcode("reader");
-    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+    if (isScanning) return;
     
-    html5QrcodeScanner.start(
-        { facingMode: "environment" },
-        config,
-        (decodedText) => {
-            stopScanner();
-            openProductAction(decodedText);
-        },
-        (errorMessage) => {}
-    ).catch(err => { alert("Kamerafehler. Bitte erlaube den Kamerazugriff im Browser."); });
+    const readerDiv = document.getElementById('reader');
+    readerDiv.style.minHeight = "300px"; 
+    readerDiv.innerHTML = "<p style='color:black; text-align:center;'>Suche Kamera...</p>";
+
+    Html5Qrcode.getCameras().then(devices => {
+        if (devices && devices.length) {
+            let cameraId = devices[0].id;
+            // Versuche spezifisch die Rückkamera zu finden
+            const backCamera = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('rück'));
+            if (backCamera) cameraId = backCamera.id;
+
+            if (!html5QrcodeScanner) html5QrcodeScanner = new Html5Qrcode("reader");
+            
+            html5QrcodeScanner.start(
+                cameraId,
+                { fps: 10, qrbox: { width: 250, height: 250 } },
+                (decodedText) => {
+                    stopScanner();
+                    openProductAction(decodedText);
+                },
+                (errorMessage) => { /* Ignorieren */ }
+            ).then(() => {
+                isScanning = true;
+            }).catch(err => {
+                alert("Fehler beim Starten der Kamera: " + err);
+            });
+        } else {
+            alert("Keine Kameras am Gerät gefunden.");
+        }
+    }).catch(err => {
+        alert("Bitte erlaube den Kamerazugriff in den Browser-Einstellungen.");
+    });
 }
 
 function stopScanner() {
-    if (html5QrcodeScanner && html5QrcodeScanner.isScanning) {
-        html5QrcodeScanner.stop().catch(console.error);
+    if (html5QrcodeScanner && isScanning) {
+        html5QrcodeScanner.stop().then(() => {
+            isScanning = false;
+        }).catch(err => console.log("Fehler beim Stoppen", err));
     }
 }
 
-// 6. PRODUKT LADEN (Firestore)
+// 6. DASHBOARD DATEN LADEN
+async function loadDashboardData() {
+    const listContainer = document.getElementById('product-list');
+    listContainer.innerHTML = '<p>Lade Bestände...</p>';
+
+    try {
+        const querySnapshot = await getDocs(collection(db, "products"));
+        if (querySnapshot.empty) {
+            listContainer.innerHTML = '<p>Noch keine Produkte im Lager.</p>';
+            return;
+        }
+
+        let html = '';
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            const sku = doc.id;
+            html += `
+                <div style="background: var(--bg-card); padding: 15px; margin-bottom: 10px; border-left: 4px solid var(--bp-yellow); border-radius: 4px; text-align: left;">
+                    <h3 style="margin-bottom: 5px; color: var(--bp-yellow);">${data.name || 'Unbenannt'}</h3>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.9rem;">
+                        <span><strong>Art-Nr:</strong> ${sku}</span>
+                        <span><strong>Regal:</strong> ${data.location || '-'}</span>
+                    </div>
+                    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 1.1rem;">
+                        <strong>Bestand:</strong> <span style="font-size: 1.3rem; color: ${data.stock > 0 ? '#4CAF50' : '#F44336'};">${data.stock || 0}</span>
+                    </div>
+                    <button onclick="window.openProductAction('${sku}')" style="margin-top: 10px; padding: 5px;" class="secondary">Bearbeiten</button>
+                </div>
+            `;
+        });
+        listContainer.innerHTML = html;
+    } catch (error) {
+        listContainer.innerHTML = '<p class="error">Fehler beim Laden.</p>';
+    }
+}
+
+window.openProductAction = openProductAction;
+
+// 7. PRODUKT LADEN
 async function openProductAction(sku) {
     document.getElementById('action-sku').innerText = sku;
     showSection('action');
@@ -115,16 +173,12 @@ async function openProductAction(sku) {
             document.getElementById('action-variants').value = data.variants || '';
             document.getElementById('action-stock').value = data.stock || 0;
         } else {
-            // Neues Produkt, Felder leeren
             document.getElementById('action-name').value = '';
             document.getElementById('action-location').value = '';
             document.getElementById('action-variants').value = '';
             document.getElementById('action-stock').value = 0;
         }
-    } catch (error) {
-        console.error("Fehler beim Abrufen der Daten:", error);
-        alert("Datenbank-Fehler. Bist du eingeloggt?");
-    }
+    } catch (error) {}
 }
 
 // Mengen-Steuerung
@@ -136,7 +190,7 @@ document.getElementById('btn-decrease').addEventListener('click', () => {
     stockInput.value = parseInt(stockInput.value || 0) - 1; 
 });
 
-// 7. PRODUKT SPEICHERN (Firestore)
+// 8. PRODUKT SPEICHERN
 document.getElementById('btn-save-product').addEventListener('click', async () => {
     const btn = document.getElementById('btn-save-product');
     btn.innerText = "Speichert...";
@@ -149,31 +203,19 @@ document.getElementById('btn-save-product').addEventListener('click', async () =
     const stock = parseInt(document.getElementById('action-stock').value || 0);
 
     try {
-        // 1. Produkt-Datenbank aktualisieren
         await setDoc(doc(db, "products", sku), {
-            name: name,
-            location: location,
-            variants: variants,
-            stock: stock,
-            updatedAt: new Date().toISOString()
-        }, { merge: true }); // merge: true sorgt dafür, dass vorhandene Daten nicht überschrieben werden, wenn sie im UI fehlen
+            name: name, location: location, variants: variants, stock: stock, updatedAt: new Date().toISOString()
+        }, { merge: true }); 
 
-        // 2. Historien-Eintrag (Logbuch) anlegen
         if (auth.currentUser) {
             await addDoc(collection(db, "history"), {
-                sku: sku,
-                name: name,
-                newStock: stock,
-                user: auth.currentUser.email,
-                timestamp: new Date().toISOString()
+                sku: sku, name: name, newStock: stock, user: auth.currentUser.email, timestamp: new Date().toISOString()
             });
         }
-
         alert("Bestand erfolgreich gebucht!");
         showSection('dashboard');
     } catch (error) {
-        console.error("Speicher-Fehler:", error);
-        alert("Fehler beim Speichern: " + error.message);
+        alert("Fehler: " + error.message);
     } finally {
         btn.innerText = "Buchen & Speichern";
         btn.disabled = false;
