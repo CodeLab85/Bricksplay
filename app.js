@@ -1,5 +1,5 @@
 
-// 1. FIREBASE IMPORTE (Direkt via CDN für GitHub Pages)
+// 1. FIREBASE IMPORTE
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
@@ -68,7 +68,7 @@ onAuthStateChanged(auth, (user) => {
     else showSection('login');
 });
 
-// 5. NAVIGATION & SCANNER LOGIK (GEFIXTE VIDEO ANSICHT)
+// 5. NAVIGATION & SCANNER LOGIK
 document.getElementById('btn-dashboard').addEventListener('click', () => { stopScanner(); showSection('dashboard'); });
 document.getElementById('btn-close-action').addEventListener('click', () => { showSection('dashboard'); });
 document.getElementById('btn-scan').addEventListener('click', () => { showSection('scanner'); startScanner(); });
@@ -78,12 +78,9 @@ function startScanner() {
     if (isScanning) return;
     
     const readerDiv = document.getElementById('reader');
-    readerDiv.innerHTML = "<h3 style='color:black; padding: 30px; text-align: center;'>Kamera wird gestartet... Bild erscheint gleich.</h3>";
+    // Weiße Schrift auf dem schwarzen Hintergrund des neuen Kästchens
+    readerDiv.innerHTML = "<h3 style='color:white; padding: 20px; text-align: center;'>Kamera wird gestartet...</h3>";
     
-    // WICHTIG: Wir warten 400 Millisekunden, bevor wir die Kamera starten.
-    // Warum? Die CSS-Animation zum Einblenden der Section dauert 300ms.
-    // Wenn die Bibliothek die Kamera startet, während die Box noch unsichtbar ist, 
-    // berechnet sie Breite/Höhe als 0 Pixel und das Video bleibt schwarz oder stürzt ab.
     setTimeout(() => {
         if (!html5QrcodeScanner) {
             html5QrcodeScanner = new Html5Qrcode("reader");
@@ -93,10 +90,9 @@ function startScanner() {
             { facingMode: "environment" },
             { 
                 fps: 15,
-                // Dynamische Scan-Box, die sich an die Handydisplay-Breite anpasst
                 qrbox: function(viewfinderWidth, viewfinderHeight) {
                     let minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
-                    let qrboxSize = Math.floor(minEdgeSize * 0.75); // 75% der verfügbaren Breite
+                    let qrboxSize = Math.floor(minEdgeSize * 0.75); 
                     return { width: qrboxSize, height: qrboxSize };
                 }
             },
@@ -104,15 +100,11 @@ function startScanner() {
                 stopScanner();
                 openProductAction(decodedText);
             },
-            (errorMessage) => {
-                // Wird mehrmals pro Sekunde gefeuert, wenn kein Code im Bild ist.
-                // Muss ignoriert werden, sonst spamt es die Konsole voll.
-            }
+            (errorMessage) => {}
         ).then(() => {
             isScanning = true;
         }).catch(err => {
-            readerDiv.innerHTML = `<p style="color:red; font-weight:bold; padding:20px;">Kamera-Fehler: ${err}</p>`;
-            console.error("Scanner Error: ", err);
+            readerDiv.innerHTML = `<p style="color:red; font-weight:bold; padding:20px; background:white;">Kamera-Fehler: ${err}</p>`;
         });
     }, 400); 
 }
@@ -121,7 +113,7 @@ function stopScanner() {
     if (html5QrcodeScanner && isScanning) {
         html5QrcodeScanner.stop().then(() => {
             isScanning = false;
-            document.getElementById('reader').innerHTML = ""; // Box leeren
+            document.getElementById('reader').innerHTML = ""; 
         }).catch(err => console.log("Fehler beim Stoppen", err));
     }
 }

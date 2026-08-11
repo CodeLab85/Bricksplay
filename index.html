@@ -36,14 +36,18 @@
             <div id="product-list" class="grid">
                 <p>Scanner nutzen, um Produkte zu laden...</p>
             </div>
-            <!-- Manuelles Hinzufügen (Dummy für späteres Dashboard-Update) -->
         </section>
 
         <!-- Scanner Section -->
         <section id="scanner-section" class="hidden">
             <h2>QR Code Scannen</h2>
-            <div id="reader" style="width: 100%; max-width: 500px; margin: 0 auto; background: white; padding: 10px; border-radius: 5px;"></div>
-            <button id="btn-cancel-scan" class="secondary" style="margin-top: 15px;">Abbrechen</button>
+            
+            <!-- HIER IST DAS FESTE KÄSTCHEN -->
+            <div id="scanner-container">
+                <div id="reader"></div>
+            </div>
+            
+            <button id="btn-cancel-scan" class="secondary" style="margin-top: 20px;">Abbrechen</button>
         </section>
 
         <!-- Product Action Section -->
@@ -67,7 +71,7 @@
         </section>
     </main>
     
-    <!-- App Logic (Module for Firebase) -->
+    <!-- App Logic -->
     <script type="module" src="app.js"></script>
 </body>
 </html>
