@@ -68,7 +68,7 @@ onAuthStateChanged(auth, (user) => {
     else showSection('login');
 });
 
-// 5. NAVIGATION & SCANNER LOGIK (GEFIXTE VERSION)
+// 5. NAVIGATION & SCANNER LOGIK (GEFIXTE VIDEO ANSICHT)
 document.getElementById('btn-dashboard').addEventListener('click', () => { stopScanner(); showSection('dashboard'); });
 document.getElementById('btn-close-action').addEventListener('click', () => { showSection('dashboard'); });
 document.getElementById('btn-scan').addEventListener('click', () => { showSection('scanner'); startScanner(); });
@@ -78,43 +78,50 @@ function startScanner() {
     if (isScanning) return;
     
     const readerDiv = document.getElementById('reader');
-    readerDiv.style.minHeight = "300px"; 
-    readerDiv.innerHTML = "<p style='color:black; text-align:center;'>Suche Kamera...</p>";
-
-    Html5Qrcode.getCameras().then(devices => {
-        if (devices && devices.length) {
-            let cameraId = devices[0].id;
-            // Versuche spezifisch die Rückkamera zu finden
-            const backCamera = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('rück'));
-            if (backCamera) cameraId = backCamera.id;
-
-            if (!html5QrcodeScanner) html5QrcodeScanner = new Html5Qrcode("reader");
-            
-            html5QrcodeScanner.start(
-                cameraId,
-                { fps: 10, qrbox: { width: 250, height: 250 } },
-                (decodedText) => {
-                    stopScanner();
-                    openProductAction(decodedText);
-                },
-                (errorMessage) => { /* Ignorieren */ }
-            ).then(() => {
-                isScanning = true;
-            }).catch(err => {
-                alert("Fehler beim Starten der Kamera: " + err);
-            });
-        } else {
-            alert("Keine Kameras am Gerät gefunden.");
+    readerDiv.innerHTML = "<h3 style='color:black; padding: 30px; text-align: center;'>Kamera wird gestartet... Bild erscheint gleich.</h3>";
+    
+    // WICHTIG: Wir warten 400 Millisekunden, bevor wir die Kamera starten.
+    // Warum? Die CSS-Animation zum Einblenden der Section dauert 300ms.
+    // Wenn die Bibliothek die Kamera startet, während die Box noch unsichtbar ist, 
+    // berechnet sie Breite/Höhe als 0 Pixel und das Video bleibt schwarz oder stürzt ab.
+    setTimeout(() => {
+        if (!html5QrcodeScanner) {
+            html5QrcodeScanner = new Html5Qrcode("reader");
         }
-    }).catch(err => {
-        alert("Bitte erlaube den Kamerazugriff in den Browser-Einstellungen.");
-    });
+        
+        html5QrcodeScanner.start(
+            { facingMode: "environment" },
+            { 
+                fps: 15,
+                // Dynamische Scan-Box, die sich an die Handydisplay-Breite anpasst
+                qrbox: function(viewfinderWidth, viewfinderHeight) {
+                    let minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
+                    let qrboxSize = Math.floor(minEdgeSize * 0.75); // 75% der verfügbaren Breite
+                    return { width: qrboxSize, height: qrboxSize };
+                }
+            },
+            (decodedText) => {
+                stopScanner();
+                openProductAction(decodedText);
+            },
+            (errorMessage) => {
+                // Wird mehrmals pro Sekunde gefeuert, wenn kein Code im Bild ist.
+                // Muss ignoriert werden, sonst spamt es die Konsole voll.
+            }
+        ).then(() => {
+            isScanning = true;
+        }).catch(err => {
+            readerDiv.innerHTML = `<p style="color:red; font-weight:bold; padding:20px;">Kamera-Fehler: ${err}</p>`;
+            console.error("Scanner Error: ", err);
+        });
+    }, 400); 
 }
 
 function stopScanner() {
     if (html5QrcodeScanner && isScanning) {
         html5QrcodeScanner.stop().then(() => {
             isScanning = false;
+            document.getElementById('reader').innerHTML = ""; // Box leeren
         }).catch(err => console.log("Fehler beim Stoppen", err));
     }
 }
