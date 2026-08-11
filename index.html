@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bricksplay Lager</title>
-    <link rel="stylesheet" href="style.css">
+    <!-- CACHE BUSTER: ?v=2 zwingt den Browser, die neueste Version zu laden -->
+    <link rel="stylesheet" href="style.css?v=2">
     <!-- QR Code Scanner -->
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 </head>
@@ -71,7 +72,7 @@
         </section>
     </main>
     
-    <!-- App Logic -->
-    <script type="module" src="app.js"></script>
+    <!-- App Logic mit Cache Buster -->
+    <script type="module" src="app.js?v=2"></script>
 </body>
 </html>

@@ -126,9 +126,9 @@ h2 {
 #scanner-container {
     width: 100%;
     max-width: 400px;
-    margin: 0 auto;
+    margin: 20px auto;
     min-height: 350px;
-    background-color: #000000; /* Schwarzer Hintergrund wie bei einer Kamera */
+    background-color: #000000; /* Schwarzer Hintergrund */
     border: 4px solid var(--bp-yellow); /* Fetter gelber Rahmen */
     border-radius: 8px;
     overflow: hidden;
@@ -140,10 +140,12 @@ h2 {
 
 #reader {
     width: 100%;
+    height: 100%;
 }
 
 #reader video {
     object-fit: cover !important;
+    width: 100% !important;
 }
 
 .error { color: #ffcccc; font-weight: bold; margin-top: 10px; background: rgba(255,0,0,0.2); padding: 10px; }

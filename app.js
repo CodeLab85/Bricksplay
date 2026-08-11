@@ -78,33 +78,48 @@ function startScanner() {
     if (isScanning) return;
     
     const readerDiv = document.getElementById('reader');
-    // Weiße Schrift auf dem schwarzen Hintergrund des neuen Kästchens
-    readerDiv.innerHTML = "<h3 style='color:white; padding: 20px; text-align: center;'>Kamera wird gestartet...</h3>";
+    readerDiv.innerHTML = "<h3 style='color:white; padding: 30px; text-align: center;'>Kamera wird gestartet...</h3>";
     
     setTimeout(() => {
         if (!html5QrcodeScanner) {
             html5QrcodeScanner = new Html5Qrcode("reader");
         }
         
-        html5QrcodeScanner.start(
-            { facingMode: "environment" },
-            { 
-                fps: 15,
-                qrbox: function(viewfinderWidth, viewfinderHeight) {
-                    let minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
-                    let qrboxSize = Math.floor(minEdgeSize * 0.75); 
-                    return { width: qrboxSize, height: qrboxSize };
-                }
-            },
-            (decodedText) => {
-                stopScanner();
-                openProductAction(decodedText);
-            },
-            (errorMessage) => {}
-        ).then(() => {
-            isScanning = true;
+        // WICHTIG: Kamera IDs auslesen, damit es auch am PC (Webcam) funktioniert!
+        Html5Qrcode.getCameras().then(devices => {
+            if (devices && devices.length) {
+                // Standard: Erste verfügbare Kamera (meist die Webcam am PC)
+                let cameraId = devices[0].id;
+                
+                // Auf dem Handy: Suche nach der Rückkamera
+                const backCamera = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('rück') || d.label.toLowerCase().includes('environment'));
+                if (backCamera) cameraId = backCamera.id;
+
+                html5QrcodeScanner.start(
+                    cameraId, // Wir nutzen die direkte ID statt "facingMode"
+                    { 
+                        fps: 15,
+                        qrbox: function(viewfinderWidth, viewfinderHeight) {
+                            let minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
+                            let qrboxSize = Math.floor(minEdgeSize * 0.75); 
+                            return { width: qrboxSize, height: qrboxSize };
+                        }
+                    },
+                    (decodedText) => {
+                        stopScanner();
+                        openProductAction(decodedText);
+                    },
+                    (errorMessage) => {}
+                ).then(() => {
+                    isScanning = true;
+                }).catch(err => {
+                    readerDiv.innerHTML = `<p style="color:red; font-weight:bold; padding:20px; background:white;">Kamera-Startfehler: ${err}</p>`;
+                });
+            } else {
+                readerDiv.innerHTML = `<p style="color:red; font-weight:bold; padding:20px; background:white;">Keine Kamera gefunden!</p>`;
+            }
         }).catch(err => {
-            readerDiv.innerHTML = `<p style="color:red; font-weight:bold; padding:20px; background:white;">Kamera-Fehler: ${err}</p>`;
+            readerDiv.innerHTML = `<p style="color:red; font-weight:bold; padding:20px; background:white;">Kamera-Zugriff blockiert.</p>`;
         });
     }, 400); 
 }
