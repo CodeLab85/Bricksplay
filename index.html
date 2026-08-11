@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bricksplay Lager</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- QR Code Scanner -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+</head>
+<body>
+    <header>
+        <div class="logo">BRICKSPLAY LAGER</div>
+        <nav id="main-nav" class="hidden">
+            <button id="btn-dashboard">Dashboard</button>
+            <button id="btn-scan" class="primary">QR Scannen</button>
+            <button id="btn-logout">Logout</button>
+        </nav>
+    </header>
+
+    <main>
+        <!-- Login Section -->
+        <section id="login-section" class="active">
+            <h2>Mitarbeiter Login</h2>
+            <form id="login-form">
+                <input type="email" id="email" placeholder="E-Mail" required>
+                <input type="password" id="password" placeholder="Passwort" required>
+                <button type="submit" class="primary">Einloggen</button>
+            </form>
+            <p id="login-error" class="error hidden"></p>
+        </section>
+
+        <!-- Dashboard Section -->
+        <section id="dashboard-section" class="hidden">
+            <h2>Aktueller Bestand</h2>
+            <div id="product-list" class="grid">
+                <p>Scanner nutzen, um Produkte zu laden...</p>
+            </div>
+            <!-- Manuelles Hinzufügen (Dummy für späteres Dashboard-Update) -->
+        </section>
+
+        <!-- Scanner Section -->
+        <section id="scanner-section" class="hidden">
+            <h2>QR Code Scannen</h2>
+            <div id="reader" style="width: 100%; max-width: 500px; margin: 0 auto; background: white; padding: 10px; border-radius: 5px;"></div>
+            <button id="btn-cancel-scan" class="secondary" style="margin-top: 15px;">Abbrechen</button>
+        </section>
+
+        <!-- Product Action Section -->
+        <section id="product-action-section" class="hidden">
+            <h2 id="action-title">Produkt Check-in/out</h2>
+            <div class="card">
+                <p><strong>Artikelnummer (QR):</strong> <span id="action-sku"></span></p>
+                <input type="text" id="action-name" placeholder="Name (z.B. Display Stand Venator)">
+                <input type="text" id="action-location" placeholder="Regal / Lagerplatz">
+                <input type="text" id="action-variants" placeholder="Varianten (z.B. 4mm Acryl)">
+                
+                <div class="stock-control">
+                    <button id="btn-decrease">-</button>
+                    <input type="number" id="action-stock" value="0">
+                    <button id="btn-increase">+</button>
+                </div>
+                
+                <button id="btn-save-product" class="primary">Buchen & Speichern</button>
+                <button id="btn-close-action" class="secondary">Zurück</button>
+            </div>
+        </section>
+    </main>
+    
+    <!-- App Logic (Module for Firebase) -->
+    <script type="module" src="app.js"></script>
+</body>
+</html>
