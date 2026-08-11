@@ -72,6 +72,7 @@ button.secondary:hover { background-color: #143254; }
 
 main { padding: 20px; max-width: 600px; margin: 0 auto; text-align: center; }
 
+/* HIER IST DIE LOGIK FÜR DIE SECTIONS */
 section { display: none; margin-top: 20px; }
 section.active { display: block; animation: fadeIn 0.3s; }
 

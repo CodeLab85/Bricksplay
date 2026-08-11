@@ -30,7 +30,9 @@ const nav = document.getElementById('main-nav');
 let qrScanner = null;
 
 function showSection(sectionName) {
+    // Entferne 'active' von allen Sections
     Object.values(sections).forEach(sec => sec.classList.remove('active'));
+    // Füge 'active' zur gewünschten Section hinzu
     sections[sectionName].classList.add('active');
     
     if(sectionName !== 'login') {
@@ -74,7 +76,7 @@ document.getElementById('btn-scan').addEventListener('click', () => { startScann
 document.getElementById('btn-cancel-scan').addEventListener('click', () => { stopScanner(); showSection('dashboard'); });
 
 
-// 6. NEUER SCANNER (Nimiq Bibliothek - Perfekt für iOS)
+// 6. NEUER SCANNER (Nimiq Bibliothek)
 function startScanner() {
     showSection('scanner');
     
@@ -90,7 +92,6 @@ function startScanner() {
                 openProductAction(result.data);
             },
             {
-                // Diese Option zeichnet den visuellen Rahmen ins Bild!
                 highlightScanRegion: true,
                 highlightCodeOutline: true,
                 returnDetailedScanResult: true
@@ -98,7 +99,6 @@ function startScanner() {
         );
     }
 
-    // Starte die Kamera (nutzt automatisch die Rückkamera)
     qrScanner.start().catch(err => {
         console.error("Kamerafehler: ", err);
         alert("Kamera konnte nicht gestartet werden. Bitte Berechtigungen prüfen.");
