@@ -2,9 +2,8 @@
 // 1. FIREBASE IMPORTE
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, collection, addDoc, getDocs, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
-// 2. DEINE FIREBASE CONFIG
 const firebaseConfig = {
   apiKey: "AIzaSyCQmIWAm9S-0FfBaJgWNGbS4i5Hl72TfKA",
   authDomain: "bricksplaylagertool.firebaseapp.com",
@@ -14,7 +13,6 @@ const firebaseConfig = {
   appId: "1:771269482314:web:578f947d14725e38bfd3b3"
 };
 
-// 3. FIREBASE INITIALISIEREN
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -23,16 +21,16 @@ const sections = {
     login: document.getElementById('login-section'),
     dashboard: document.getElementById('dashboard-section'),
     scanner: document.getElementById('scanner-section'),
-    action: document.getElementById('product-action-section')
+    action: document.getElementById('product-action-section'),
+    history: document.getElementById('history-section')
 };
 const nav = document.getElementById('main-nav');
-
 let qrScanner = null;
+let currentLoadedStock = 0; // Merkt sich den echten Bestand beim Laden für den Delta-Modus
+let allInventoryData = []; // Für die Suchfunktion
 
 function showSection(sectionName) {
-    // Entferne 'active' von allen Sections
     Object.values(sections).forEach(sec => sec.classList.remove('active'));
-    // Füge 'active' zur gewünschten Section hinzu
     sections[sectionName].classList.add('active');
     
     if(sectionName !== 'login') {
@@ -41,117 +39,122 @@ function showSection(sectionName) {
         nav.classList.add('hidden');
     }
 
-    if(sectionName === 'dashboard') {
-        loadDashboardData();
-    }
+    if(sectionName === 'dashboard') loadDashboardData();
+    if(sectionName === 'history') loadHistoryData();
 }
 
-// 4. AUTHENTIFIZIERUNG
+// 4. AUTH & NAVIGATION
 document.getElementById('login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const email = document.getElementById('email').value;
-    const password = document.getElementById('password').value;
-    const errorMsg = document.getElementById('login-error');
-
     try {
-        await signInWithEmailAndPassword(auth, email, password);
-        errorMsg.classList.add('hidden');
+        await signInWithEmailAndPassword(auth, document.getElementById('email').value, document.getElementById('password').value);
+        document.getElementById('login-error').classList.add('hidden');
     } catch (error) {
-        errorMsg.innerText = "Login fehlgeschlagen. E-Mail oder Passwort falsch.";
-        errorMsg.classList.remove('hidden');
+        document.getElementById('login-error').innerText = "Login fehlgeschlagen.";
+        document.getElementById('login-error').classList.remove('hidden');
+    }
+});
+document.getElementById('btn-logout').addEventListener('click', () => signOut(auth));
+onAuthStateChanged(auth, (user) => { if (user) showSection('dashboard'); else showSection('login'); });
+
+document.getElementById('btn-dashboard').addEventListener('click', () => { stopScanner(); showSection('dashboard'); });
+document.getElementById('btn-close-action').addEventListener('click', () => showSection('dashboard'));
+document.getElementById('btn-scan').addEventListener('click', startScanner);
+document.getElementById('btn-cancel-scan').addEventListener('click', () => { stopScanner(); showSection('dashboard'); });
+document.getElementById('btn-history').addEventListener('click', () => { stopScanner(); showSection('history'); });
+
+// DYNAMIC FIELDS TOGGLE
+document.getElementById('action-type').addEventListener('change', (e) => {
+    if(e.target.value === 'produkt') {
+        document.getElementById('fields-produkt').classList.remove('hidden');
+        document.getElementById('fields-material').classList.add('hidden');
+    } else {
+        document.getElementById('fields-produkt').classList.add('hidden');
+        document.getElementById('fields-material').classList.remove('hidden');
     }
 });
 
-document.getElementById('btn-logout').addEventListener('click', () => signOut(auth));
-
-onAuthStateChanged(auth, (user) => {
-    if (user) showSection('dashboard');
-    else showSection('login');
-});
-
-// 5. NAVIGATION
-document.getElementById('btn-dashboard').addEventListener('click', () => { stopScanner(); showSection('dashboard'); });
-document.getElementById('btn-close-action').addEventListener('click', () => { showSection('dashboard'); });
-document.getElementById('btn-scan').addEventListener('click', () => { startScanner(); });
-document.getElementById('btn-cancel-scan').addEventListener('click', () => { stopScanner(); showSection('dashboard'); });
-
-
-// 6. NEUER SCANNER (Nimiq Bibliothek)
+// SCANNER (Nimiq)
 function startScanner() {
     showSection('scanner');
-    
     const videoElem = document.getElementById('qr-video');
-
     if (!qrScanner) {
-        // Initialisiere den neuen Scanner
-        qrScanner = new QrScanner(
-            videoElem,
-            result => {
-                // Wenn ein Code gefunden wurde
-                stopScanner();
-                openProductAction(result.data);
-            },
-            {
-                highlightScanRegion: true,
-                highlightCodeOutline: true,
-                returnDetailedScanResult: true
-            }
-        );
+        qrScanner = new QrScanner(videoElem, result => {
+            stopScanner(); openProductAction(result.data);
+        }, { highlightScanRegion: true, highlightCodeOutline: true });
     }
-
-    qrScanner.start().catch(err => {
-        console.error("Kamerafehler: ", err);
-        alert("Kamera konnte nicht gestartet werden. Bitte Berechtigungen prüfen.");
-    });
+    qrScanner.start().catch(err => alert("Kamerafehler."));
 }
+function stopScanner() { if (qrScanner) qrScanner.stop(); }
 
-function stopScanner() {
-    if (qrScanner) {
-        qrScanner.stop();
-    }
-}
-
-// 7. DASHBOARD DATEN LADEN
+// DASHBOARD & SUCHE
 async function loadDashboardData() {
-    const listContainer = document.getElementById('product-list');
-    listContainer.innerHTML = '<p>Lade Bestände...</p>';
+    const prodList = document.getElementById('product-list');
+    const matList = document.getElementById('material-list');
+    prodList.innerHTML = '<p>Lade...</p>'; matList.innerHTML = '<p>Lade...</p>';
 
     try {
         const querySnapshot = await getDocs(collection(db, "products"));
-        if (querySnapshot.empty) {
-            listContainer.innerHTML = '<p>Noch keine Produkte im Lager.</p>';
-            return;
-        }
-
-        let html = '';
+        allInventoryData = [];
         querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            const sku = doc.id;
-            html += `
-                <div style="background: var(--bg-card); padding: 15px; margin-bottom: 10px; border-left: 4px solid var(--bp-yellow); border-radius: 4px; text-align: left;">
-                    <h3 style="margin-bottom: 5px; color: var(--bp-yellow);">${data.name || 'Unbenannt'}</h3>
-                    <div style="display: flex; justify-content: space-between; font-size: 0.9rem;">
-                        <span><strong>Art-Nr:</strong> ${sku}</span>
-                        <span><strong>Regal:</strong> ${data.location || '-'}</span>
-                    </div>
-                    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 1.1rem;">
-                        <strong>Bestand:</strong> <span style="font-size: 1.3rem; color: ${data.stock > 0 ? '#4CAF50' : '#F44336'};">${data.stock || 0}</span>
-                    </div>
-                    <button onclick="window.openProductAction('${sku}')" style="margin-top: 10px; padding: 5px;" class="secondary">Bearbeiten</button>
-                </div>
-            `;
+            allInventoryData.push({ id: doc.id, ...doc.data() });
         });
-        listContainer.innerHTML = html;
+        renderDashboard(allInventoryData);
     } catch (error) {
-        listContainer.innerHTML = '<p class="error">Fehler beim Laden.</p>';
+        console.error(error);
     }
 }
 
-window.openProductAction = openProductAction;
+function renderDashboard(dataArray) {
+    const prodList = document.getElementById('product-list');
+    const matList = document.getElementById('material-list');
+    let htmlProd = ''; let htmlMat = '';
 
-// 8. PRODUKT LADEN
-async function openProductAction(sku) {
+    dataArray.forEach((data) => {
+        const itemType = data.type || 'produkt';
+        const imgHtml = data.image ? `<img src="${data.image}" class="item-image" onerror="this.style.display='none'">` : '';
+        const name = data.name || 'Unbenannt';
+        const asinStr = data.asin ? `<br><small style="color:#aaa;">ASIN: ${data.asin}</small>` : '';
+        
+        const cardHtml = `
+            <div class="item-card">
+                ${itemType === 'produkt' ? imgHtml : ''}
+                <div class="item-details">
+                    <h3 style="margin-bottom: 5px; color: var(--bp-yellow);">${name}</h3>
+                    <div style="font-size: 0.9rem;">
+                        <strong>SKU:</strong> ${data.id} ${asinStr}<br>
+                        <strong>Platz:</strong> ${data.location || '-'}
+                    </div>
+                    <div style="margin-top: 8px; font-size: 1.1rem;">
+                        Bestand: <strong style="font-size: 1.3rem; color: ${data.stock > 0 ? '#4CAF50' : '#F44336'};">${data.stock || 0}</strong>
+                    </div>
+                    <button onclick="window.openProductAction('${data.id}')" style="margin-top: 10px; padding: 5px;" class="secondary">Bearbeiten</button>
+                </div>
+            </div>
+        `;
+        if (itemType === 'material') htmlMat += cardHtml; else htmlProd += cardHtml;
+    });
+
+    prodList.innerHTML = htmlProd !== '' ? htmlProd : '<p>Keine Produkte gefunden.</p>';
+    matList.innerHTML = htmlMat !== '' ? htmlMat : '<p>Kein Material gefunden.</p>';
+}
+
+// Suchfunktion Echtzeit
+document.getElementById('search-input').addEventListener('input', (e) => {
+    const term = e.target.value.toLowerCase();
+    const filtered = allInventoryData.filter(item => {
+        return (item.name && item.name.toLowerCase().includes(term)) || 
+               (item.id && item.id.toLowerCase().includes(term)) ||
+               (item.asin && item.asin.toLowerCase().includes(term)) ||
+               (item.location && item.location.toLowerCase().includes(term));
+    });
+    renderDashboard(filtered);
+});
+
+// PRODUKT LADEN
+window.openProductAction = async function(sku) {
     document.getElementById('action-sku').innerText = sku;
+    document.getElementById('inventur-mode').checked = false; // Standardmäßig aus
     showSection('action');
 
     try {
@@ -160,56 +163,152 @@ async function openProductAction(sku) {
 
         if (docSnap.exists()) {
             const data = docSnap.data();
-            document.getElementById('action-name').value = data.name || '';
-            document.getElementById('action-location').value = data.location || '';
-            document.getElementById('action-variants').value = data.variants || '';
-            document.getElementById('action-stock').value = data.stock || 0;
+            document.getElementById('action-type').value = data.type || 'produkt';
+            document.getElementById('action-type').dispatchEvent(new Event('change')); // UI aktualisieren
+            
+            // Produkt
+            document.getElementById('prod-image').value = data.image || '';
+            document.getElementById('prod-asin').value = data.asin || '';
+            document.getElementById('prod-name').value = data.name || '';
+            document.getElementById('prod-subtype').value = data.subType || '';
+            document.getElementById('prod-variant').value = data.variant || '';
+            document.getElementById('prod-location').value = data.location || '';
+            
+            // Material
+            document.getElementById('mat-name').value = data.name || '';
+            document.getElementById('mat-subtype').value = data.subType || '';
+            document.getElementById('mat-location').value = data.location || '';
+            
+            currentLoadedStock = data.stock || 0;
+            document.getElementById('action-stock').value = currentLoadedStock;
         } else {
-            document.getElementById('action-name').value = '';
-            document.getElementById('action-location').value = '';
-            document.getElementById('action-variants').value = '';
+            // Neuer Scan
+            document.getElementById('action-type').value = 'produkt';
+            document.getElementById('action-type').dispatchEvent(new Event('change'));
+            document.querySelectorAll('#product-action-section input[type="text"]').forEach(i => i.value = '');
+            document.getElementById('prod-subtype').value = '';
+            currentLoadedStock = 0;
             document.getElementById('action-stock').value = 0;
         }
     } catch (error) {}
 }
 
-// Mengen-Steuerung
 const stockInput = document.getElementById('action-stock');
-document.getElementById('btn-increase').addEventListener('click', () => {
-    stockInput.value = parseInt(stockInput.value || 0) + 1;
-});
-document.getElementById('btn-decrease').addEventListener('click', () => {
-    stockInput.value = parseInt(stockInput.value || 0) - 1; 
-});
+document.getElementById('btn-increase').addEventListener('click', () => stockInput.value = parseInt(stockInput.value || 0) + 1);
+document.getElementById('btn-decrease').addEventListener('click', () => stockInput.value = parseInt(stockInput.value || 0) - 1);
 
-// 9. PRODUKT SPEICHERN
+// SPEICHERN (Mit Inventur-Sicherung)
 document.getElementById('btn-save-product').addEventListener('click', async () => {
     const btn = document.getElementById('btn-save-product');
-    btn.innerText = "Speichert...";
-    btn.disabled = true;
+    btn.innerText = "Speichert..."; btn.disabled = true;
 
     const sku = document.getElementById('action-sku').innerText;
-    const name = document.getElementById('action-name').value;
-    const location = document.getElementById('action-location').value;
-    const variants = document.getElementById('action-variants').value;
-    const stock = parseInt(document.getElementById('action-stock').value || 0);
+    const type = document.getElementById('action-type').value;
+    const isInventur = document.getElementById('inventur-mode').checked;
+    const inputStock = parseInt(stockInput.value || 0);
+    
+    // Daten sammeln je nach Typ
+    let saveData = { type: type, updatedAt: new Date().toISOString() };
+    let nameForLog = "";
+
+    if (type === 'produkt') {
+        saveData.image = document.getElementById('prod-image').value;
+        saveData.asin = document.getElementById('prod-asin').value;
+        saveData.name = document.getElementById('prod-name').value;
+        saveData.subType = document.getElementById('prod-subtype').value;
+        saveData.variant = document.getElementById('prod-variant').value;
+        saveData.location = document.getElementById('prod-location').value;
+        nameForLog = saveData.name;
+    } else {
+        saveData.name = document.getElementById('mat-name').value;
+        saveData.subType = document.getElementById('mat-subtype').value;
+        saveData.location = document.getElementById('mat-location').value;
+        nameForLog = saveData.name;
+    }
 
     try {
-        await setDoc(doc(db, "products", sku), {
-            name: name, location: location, variants: variants, stock: stock, updatedAt: new Date().toISOString()
-        }, { merge: true }); 
+        // SICHERHEIT: Aktuellen Bestand holen (falls jemand anderes gerade gebucht hat)
+        const docRef = doc(db, "products", sku);
+        const docSnap = await getDoc(docRef);
+        let absoluteDBStock = 0;
+        if (docSnap.exists()) absoluteDBStock = docSnap.data().stock || 0;
 
+        let finalNewStock = 0;
+        if (isInventur) {
+            // HARTES ÜBERSCHREIBEN
+            finalNewStock = inputStock;
+        } else {
+            // DELTA BERECHNEN (Was habe ich in der Maske verändert?)
+            const delta = inputStock - currentLoadedStock;
+            finalNewStock = absoluteDBStock + delta;
+        }
+        
+        saveData.stock = finalNewStock;
+
+        // In DB Speichern
+        await setDoc(docRef, saveData, { merge: true }); 
+
+        // Historie
         if (auth.currentUser) {
             await addDoc(collection(db, "history"), {
-                sku: sku, name: name, newStock: stock, user: auth.currentUser.email, timestamp: new Date().toISOString()
+                sku: sku, name: nameForLog, type: type,
+                oldStock: absoluteDBStock, newStock: finalNewStock, 
+                isInventurMode: isInventur,
+                user: auth.currentUser.email, timestamp: new Date().toISOString()
             });
         }
-        alert("Bestand erfolgreich gebucht!");
         showSection('dashboard');
     } catch (error) {
         alert("Fehler: " + error.message);
     } finally {
-        btn.innerText = "Buchen & Speichern";
-        btn.disabled = false;
+        btn.innerText = "Buchen & Speichern"; btn.disabled = false;
+    }
+});
+
+// LOGBUCH & CSV EXPORT
+async function loadHistoryData() {
+    const histList = document.getElementById('history-list');
+    histList.innerHTML = 'Lade...';
+    try {
+        // Lade die letzten 20 Einträge
+        const q = query(collection(db, "history"), orderBy("timestamp", "desc"), limit(20));
+        const querySnapshot = await getDocs(q);
+        let html = '';
+        querySnapshot.forEach((doc) => {
+            const d = doc.data();
+            const date = new Date(d.timestamp).toLocaleString('de-DE');
+            html += `<div class="history-item">
+                <strong style="color:var(--bp-yellow)">${d.name || d.sku}</strong> <br>
+                Neu: ${d.newStock} (Alt: ${d.oldStock}) ${d.isInventurMode ? '[INVENTUR]' : ''} <br>
+                <small>${date} | ${d.user}</small>
+            </div>`;
+        });
+        histList.innerHTML = html !== '' ? html : 'Keine Historie gefunden.';
+    } catch (e) { console.error(e); }
+}
+
+document.getElementById('btn-export-csv').addEventListener('click', async () => {
+    try {
+        const querySnapshot = await getDocs(collection(db, "history"));
+        let csvContent = "data:text/csv;charset=utf-8,Datum,User,SKU,Name,Typ,Alt-Bestand,Neu-Bestand,InventurModus\n";
+        
+        querySnapshot.forEach((doc) => {
+            const d = doc.data();
+            const row = [
+                d.timestamp, d.user, d.sku, `"${d.name || ''}"`, d.type, 
+                d.oldStock, d.newStock, d.isInventurMode ? 'JA' : 'NEIN'
+            ].join(",");
+            csvContent += row + "\n";
+        });
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "bricksplay_lager_logbuch.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    } catch (error) {
+        alert("Fehler beim Exportieren.");
     }
 });

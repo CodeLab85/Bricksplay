@@ -4,10 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bricksplay Lager</title>
-    <!-- CACHE BUSTER v6 -->
-    <link rel="stylesheet" href="style.css?v=6">
-    
-    <!-- DIE NEUE, iOS-OPTIMIERTE BIBLIOTHEK -->
+    <!-- CACHE BUSTER v8 -->
+    <link rel="stylesheet" href="style.css?v=8">
     <script src="https://unpkg.com/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
 </head>
 <body>
@@ -15,7 +13,8 @@
         <div class="logo">BRICKSPLAY LAGER</div>
         <nav id="main-nav" class="hidden">
             <button id="btn-dashboard">Dashboard</button>
-            <button id="btn-scan" class="primary">QR Scannen</button>
+            <button id="btn-scan" class="primary">Scannen</button>
+            <button id="btn-history">Logbuch</button>
             <button id="btn-logout">Logout</button>
         </nav>
     </header>
@@ -32,46 +31,92 @@
             <p id="login-error" class="error hidden"></p>
         </section>
 
-        <!-- Dashboard Section (FEHLER BEHOBEN: class="hidden" IST WEG!) -->
+        <!-- Dashboard Section -->
         <section id="dashboard-section">
-            <h2>Aktueller Bestand</h2>
-            <div id="product-list" class="grid">
-                <p>Lade Daten...</p>
-            </div>
+            <h2>Lagerbestand</h2>
+            <input type="text" id="search-input" class="search-bar" placeholder="🔍 Suchen nach Name, ASIN, Regal...">
+            
+            <h3 class="category-title">Produkte (Erzeugnisse)</h3>
+            <div id="product-list" class="grid"></div>
+
+            <h3 class="category-title">Material (Rohstoffe)</h3>
+            <div id="material-list" class="grid"></div>
         </section>
 
-        <!-- Scanner Section (FEHLER BEHOBEN: class="hidden" IST WEG!) -->
+        <!-- Scanner Section -->
         <section id="scanner-section">
             <h2>QR Code Scannen</h2>
-            
             <div id="scanner-container">
                 <video id="qr-video"></video>
             </div>
-            
             <button id="btn-cancel-scan" class="secondary" style="margin-top: 20px;">Abbrechen</button>
         </section>
 
-        <!-- Product Action Section (FEHLER BEHOBEN: class="hidden" IST WEG!) -->
+        <!-- Product Action Section -->
         <section id="product-action-section">
-            <h2 id="action-title">Produkt Check-in/out</h2>
+            <h2 id="action-title">Bestand buchen</h2>
             <div class="card">
-                <p><strong>Artikelnummer (QR):</strong> <span id="action-sku"></span></p>
-                <input type="text" id="action-name" placeholder="Name (z.B. Display Stand Venator)">
-                <input type="text" id="action-location" placeholder="Regal / Lagerplatz">
-                <input type="text" id="action-variants" placeholder="Varianten (z.B. 4mm Acryl)">
+                <p><strong>Artikelnummer / QR:</strong> <span id="action-sku"></span></p>
+                
+                <select id="action-type" class="type-selector">
+                    <option value="produkt">Kategorie: Produkt (Erzeugnis)</option>
+                    <option value="material">Kategorie: Material (Rohstoff)</option>
+                </select>
+
+                <!-- PRODUKT FELDER -->
+                <div id="fields-produkt" class="dynamic-fields">
+                    <input type="text" id="prod-image" placeholder="Foto URL (z.B. https://link-zum-bild.jpg)">
+                    <input type="text" id="prod-asin" placeholder="ASIN / Produktnummer">
+                    <input type="text" id="prod-name" placeholder="Name (z.B. Display Stand Venator)">
+                    <select id="prod-subtype">
+                        <option value="">Typ auswählen...</option>
+                        <option value="Vitrine">Vitrine</option>
+                        <option value="Display Stand">Display Stand</option>
+                        <option value="Case">Case</option>
+                        <option value="Sonstiges">Sonstiges</option>
+                    </select>
+                    <input type="text" id="prod-variant" placeholder="Variante (z.B. 4mm Acryl)">
+                    <input type="text" id="prod-location" placeholder="Regal (Lagerplatz)">
+                </div>
+
+                <!-- MATERIAL FELDER -->
+                <div id="fields-material" class="dynamic-fields hidden">
+                    <input type="text" id="mat-name" placeholder="Material Name (z.B. Acrylplatte)">
+                    <input type="text" id="mat-subtype" placeholder="Typ / Spezifikation (z.B. 100x50x4mm)">
+                    <input type="text" id="mat-location" placeholder="Abstellplatz">
+                </div>
                 
                 <div class="stock-control">
                     <button id="btn-decrease">-</button>
                     <input type="number" id="action-stock" value="0">
                     <button id="btn-increase">+</button>
                 </div>
+
+                <div class="inventur-toggle">
+                    <input type="checkbox" id="inventur-mode">
+                    <label for="inventur-mode"><b>Inventur-Modus</b> (Überschreibt Bestand hart. Wenn aus, wird nur die +/- Differenz gebucht)</label>
+                </div>
                 
                 <button id="btn-save-product" class="primary">Buchen & Speichern</button>
                 <button id="btn-close-action" class="secondary">Zurück</button>
             </div>
         </section>
+
+        <!-- Logbuch & Admin Section -->
+        <section id="history-section">
+            <h2>Logbuch & Export</h2>
+            <div class="card">
+                <p>Exportiere alle Lagerbewegungen als CSV für Excel oder die Buchhaltung.</p>
+                <button id="btn-export-csv" class="primary">📥 Historie als CSV herunterladen</button>
+                <hr style="margin: 20px 0; border: 1px solid rgba(255,255,255,0.1);">
+                <p><i>Zukünftige Funktion:</i></p>
+                <button class="secondary" disabled>📤 Produkte aus CSV importieren (Coming Soon)</button>
+            </div>
+            <h3 class="category-title">Letzte Bewegungen</h3>
+            <div id="history-list">Lade Logbuch...</div>
+        </section>
     </main>
     
-    <script type="module" src="app.js?v=6"></script>
+    <script type="module" src="app.js?v=8"></script>
 </body>
 </html>
