@@ -27,13 +27,7 @@ const sections = {
 };
 const nav = document.getElementById('main-nav');
 
-// JSQR VARIABLEN
-let video = document.getElementById("qr-video");
-let canvasElement = document.getElementById("qr-canvas");
-let canvas = canvasElement.getContext("2d", { willReadFrequently: true });
-let scanFeedback = document.getElementById("scan-feedback");
-let currentStream = null;
-let isScanning = false;
+let qrScanner = null;
 
 function showSection(sectionName) {
     Object.values(sections).forEach(sec => sec.classList.remove('active'));
@@ -80,66 +74,41 @@ document.getElementById('btn-scan').addEventListener('click', () => { startScann
 document.getElementById('btn-cancel-scan').addEventListener('click', () => { stopScanner(); showSection('dashboard'); });
 
 
-// 6. NEUER SCANNER (Nativ + jsQR)
+// 6. NEUER SCANNER (Nimiq Bibliothek - Perfekt für iOS)
 function startScanner() {
     showSection('scanner');
-    isScanning = true;
-    scanFeedback.innerText = "Zugriff auf Kamera... Bitte erlauben.";
-    scanFeedback.style.display = "block";
-    video.style.display = "none";
+    
+    const videoElem = document.getElementById('qr-video');
 
-    // Greife auf die Rückkamera zu
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(function(stream) {
-        currentStream = stream;
-        video.srcObject = stream;
-        video.setAttribute("playsinline", true); // Apple Pflicht-Befehl
-        video.play();
-        requestAnimationFrame(tick);
-    }).catch(function(err) {
-        scanFeedback.innerText = "Fehler: Keine Kamera gefunden oder Zugriff verweigert.";
-        console.error("Camera Error:", err);
+    if (!qrScanner) {
+        // Initialisiere den neuen Scanner
+        qrScanner = new QrScanner(
+            videoElem,
+            result => {
+                // Wenn ein Code gefunden wurde
+                stopScanner();
+                openProductAction(result.data);
+            },
+            {
+                // Diese Option zeichnet den visuellen Rahmen ins Bild!
+                highlightScanRegion: true,
+                highlightCodeOutline: true,
+                returnDetailedScanResult: true
+            }
+        );
+    }
+
+    // Starte die Kamera (nutzt automatisch die Rückkamera)
+    qrScanner.start().catch(err => {
+        console.error("Kamerafehler: ", err);
+        alert("Kamera konnte nicht gestartet werden. Bitte Berechtigungen prüfen.");
     });
 }
 
-function tick() {
-    if (!isScanning) return; // Stoppe Loop, wenn abgebrochen
-
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        scanFeedback.style.display = "none";
-        video.style.display = "block";
-        
-        // Canvas an Videogröße anpassen
-        canvasElement.height = video.videoHeight;
-        canvasElement.width = video.videoWidth;
-        
-        // Videobild auf Canvas malen
-        canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
-        var imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
-        
-        // Bilddaten an jsQR übergeben
-        var code = jsQR(imageData.data, imageData.width, imageData.height, {
-            inversionAttempts: "dontInvert",
-        });
-        
-        // Wenn QR Code gefunden:
-        if (code) {
-            stopScanner();
-            openProductAction(code.data);
-            return;
-        }
-    }
-    // Loop fortsetzen, solange kein Code gefunden wurde
-    requestAnimationFrame(tick);
-}
-
 function stopScanner() {
-    isScanning = false;
-    if (currentStream) {
-        currentStream.getTracks().forEach(track => track.stop()); // Kamera abschalten
-        currentStream = null;
+    if (qrScanner) {
+        qrScanner.stop();
     }
-    video.srcObject = null;
-    video.style.display = "none";
 }
 
 // 7. DASHBOARD DATEN LADEN
