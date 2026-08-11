@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bricksplay Lager</title>
-    <!-- CACHE BUSTER v8 -->
-    <link rel="stylesheet" href="style.css?v=8">
+    <!-- CACHE BUSTER v10 -->
+    <link rel="stylesheet" href="style.css?v=10">
     <script src="https://unpkg.com/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
 </head>
 <body>
@@ -54,7 +54,7 @@
 
         <!-- Product Action Section -->
         <section id="product-action-section">
-            <h2 id="action-title">Bestand buchen</h2>
+            <h2>Bestand buchen</h2>
             <div class="card">
                 <p><strong>Artikelnummer / QR:</strong> <span id="action-sku"></span></p>
                 
@@ -104,19 +104,28 @@
 
         <!-- Logbuch & Admin Section -->
         <section id="history-section">
-            <h2>Logbuch & Export</h2>
+            <h2>Admin & CSV-Schnittstelle</h2>
             <div class="card">
-                <p>Exportiere alle Lagerbewegungen als CSV für Excel oder die Buchhaltung.</p>
-                <button id="btn-export-csv" class="primary">📥 Historie als CSV herunterladen</button>
+                <p><strong>Lagerbestand Exportieren</strong><br>Lade alle aktuellen Artikel als CSV-Tabelle herunter (perfekt als Vorlage).</p>
+                <button id="btn-export-inventory" class="primary">📥 Lagerbestand als CSV herunterladen</button>
+                
                 <hr style="margin: 20px 0; border: 1px solid rgba(255,255,255,0.1);">
-                <p><i>Zukünftige Funktion:</i></p>
-                <button class="secondary" disabled>📤 Produkte aus CSV importieren (Coming Soon)</button>
+                
+                <p><strong>Produkte / Bestand Importieren</strong><br>Lade eine ausgefüllte CSV-Datei hoch, um Artikel massenhaft anzulegen oder zu aktualisieren.</p>
+                <input type="file" id="csv-file-input" accept=".csv" style="background:white; color:black; padding:8px; margin-top:5px;">
+                <button id="btn-import-csv" class="secondary" style="margin-top:10px;">📤 CSV-Datei hochladen & importieren</button>
             </div>
+
+            <div class="card" style="margin-top: 20px;">
+                <p><strong>Logbuch Export</strong></p>
+                <button id="btn-export-history" class="secondary">📥 Historie als CSV herunterladen</button>
+            </div>
+
             <h3 class="category-title">Letzte Bewegungen</h3>
             <div id="history-list">Lade Logbuch...</div>
         </section>
     </main>
     
-    <script type="module" src="app.js?v=8"></script>
+    <script type="module" src="app.js?v=10"></script>
 </body>
 </html>

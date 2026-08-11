@@ -26,8 +26,8 @@ const sections = {
 };
 const nav = document.getElementById('main-nav');
 let qrScanner = null;
-let currentLoadedStock = 0; // Merkt sich den echten Bestand beim Laden für den Delta-Modus
-let allInventoryData = []; // Für die Suchfunktion
+let currentLoadedStock = 0; 
+let allInventoryData = []; 
 
 function showSection(sectionName) {
     Object.values(sections).forEach(sec => sec.classList.remove('active'));
@@ -74,13 +74,25 @@ document.getElementById('action-type').addEventListener('change', (e) => {
     }
 });
 
+function cleanSku(rawText) {
+    if (!rawText) return "";
+    let trimmed = rawText.trim();
+    if (trimmed.includes('/')) {
+        let parts = trimmed.split('/');
+        trimmed = parts[parts.length - 1];
+    }
+    return trimmed;
+}
+
 // SCANNER (Nimiq)
 function startScanner() {
     showSection('scanner');
     const videoElem = document.getElementById('qr-video');
     if (!qrScanner) {
         qrScanner = new QrScanner(videoElem, result => {
-            stopScanner(); openProductAction(result.data);
+            stopScanner(); 
+            const cleanCode = cleanSku(result.data);
+            openProductAction(cleanCode);
         }, { highlightScanRegion: true, highlightCodeOutline: true });
     }
     qrScanner.start().catch(err => alert("Kamerafehler."));
@@ -139,7 +151,6 @@ function renderDashboard(dataArray) {
     matList.innerHTML = htmlMat !== '' ? htmlMat : '<p>Kein Material gefunden.</p>';
 }
 
-// Suchfunktion Echtzeit
 document.getElementById('search-input').addEventListener('input', (e) => {
     const term = e.target.value.toLowerCase();
     const filtered = allInventoryData.filter(item => {
@@ -151,22 +162,21 @@ document.getElementById('search-input').addEventListener('input', (e) => {
     renderDashboard(filtered);
 });
 
-// PRODUKT LADEN
 window.openProductAction = async function(sku) {
-    document.getElementById('action-sku').innerText = sku;
-    document.getElementById('inventur-mode').checked = false; // Standardmäßig aus
+    const cleanedSku = cleanSku(sku); 
+    document.getElementById('action-sku').innerText = cleanedSku;
+    document.getElementById('inventur-mode').checked = false; 
     showSection('action');
 
     try {
-        const docRef = doc(db, "products", sku);
+        const docRef = doc(db, "products", cleanedSku);
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
             const data = docSnap.data();
             document.getElementById('action-type').value = data.type || 'produkt';
-            document.getElementById('action-type').dispatchEvent(new Event('change')); // UI aktualisieren
+            document.getElementById('action-type').dispatchEvent(new Event('change')); 
             
-            // Produkt
             document.getElementById('prod-image').value = data.image || '';
             document.getElementById('prod-asin').value = data.asin || '';
             document.getElementById('prod-name').value = data.name || '';
@@ -174,7 +184,6 @@ window.openProductAction = async function(sku) {
             document.getElementById('prod-variant').value = data.variant || '';
             document.getElementById('prod-location').value = data.location || '';
             
-            // Material
             document.getElementById('mat-name').value = data.name || '';
             document.getElementById('mat-subtype').value = data.subType || '';
             document.getElementById('mat-location').value = data.location || '';
@@ -182,7 +191,6 @@ window.openProductAction = async function(sku) {
             currentLoadedStock = data.stock || 0;
             document.getElementById('action-stock').value = currentLoadedStock;
         } else {
-            // Neuer Scan
             document.getElementById('action-type').value = 'produkt';
             document.getElementById('action-type').dispatchEvent(new Event('change'));
             document.querySelectorAll('#product-action-section input[type="text"]').forEach(i => i.value = '');
@@ -197,17 +205,15 @@ const stockInput = document.getElementById('action-stock');
 document.getElementById('btn-increase').addEventListener('click', () => stockInput.value = parseInt(stockInput.value || 0) + 1);
 document.getElementById('btn-decrease').addEventListener('click', () => stockInput.value = parseInt(stockInput.value || 0) - 1);
 
-// SPEICHERN (Mit Inventur-Sicherung)
 document.getElementById('btn-save-product').addEventListener('click', async () => {
     const btn = document.getElementById('btn-save-product');
     btn.innerText = "Speichert..."; btn.disabled = true;
 
-    const sku = document.getElementById('action-sku').innerText;
+    const sku = cleanSku(document.getElementById('action-sku').innerText);
     const type = document.getElementById('action-type').value;
     const isInventur = document.getElementById('inventur-mode').checked;
     const inputStock = parseInt(stockInput.value || 0);
     
-    // Daten sammeln je nach Typ
     let saveData = { type: type, updatedAt: new Date().toISOString() };
     let nameForLog = "";
 
@@ -227,7 +233,6 @@ document.getElementById('btn-save-product').addEventListener('click', async () =
     }
 
     try {
-        // SICHERHEIT: Aktuellen Bestand holen (falls jemand anderes gerade gebucht hat)
         const docRef = doc(db, "products", sku);
         const docSnap = await getDoc(docRef);
         let absoluteDBStock = 0;
@@ -235,20 +240,16 @@ document.getElementById('btn-save-product').addEventListener('click', async () =
 
         let finalNewStock = 0;
         if (isInventur) {
-            // HARTES ÜBERSCHREIBEN
             finalNewStock = inputStock;
         } else {
-            // DELTA BERECHNEN (Was habe ich in der Maske verändert?)
             const delta = inputStock - currentLoadedStock;
             finalNewStock = absoluteDBStock + delta;
         }
         
         saveData.stock = finalNewStock;
 
-        // In DB Speichern
         await setDoc(docRef, saveData, { merge: true }); 
 
-        // Historie
         if (auth.currentUser) {
             await addDoc(collection(db, "history"), {
                 sku: sku, name: nameForLog, type: type,
@@ -265,12 +266,11 @@ document.getElementById('btn-save-product').addEventListener('click', async () =
     }
 });
 
-// LOGBUCH & CSV EXPORT
+// LOGBUCH & EXPORT
 async function loadHistoryData() {
     const histList = document.getElementById('history-list');
     histList.innerHTML = 'Lade...';
     try {
-        // Lade die letzten 20 Einträge
         const q = query(collection(db, "history"), orderBy("timestamp", "desc"), limit(20));
         const querySnapshot = await getDocs(q);
         let html = '';
@@ -287,16 +287,25 @@ async function loadHistoryData() {
     } catch (e) { console.error(e); }
 }
 
-document.getElementById('btn-export-csv').addEventListener('click', async () => {
+// 1. LAGERBESTAND ALS CSV EXPORTIEREN
+document.getElementById('btn-export-inventory').addEventListener('click', async () => {
     try {
-        const querySnapshot = await getDocs(collection(db, "history"));
-        let csvContent = "data:text/csv;charset=utf-8,Datum,User,SKU,Name,Typ,Alt-Bestand,Neu-Bestand,InventurModus\n";
+        const querySnapshot = await getDocs(collection(db, "products"));
+        // CSV Header: SKU,Typ,Name,ASIN,SubTyp,Variante,Lagerplatz,Bestand,BildURL
+        let csvContent = "data:text/csv;charset=utf-8,SKU,Typ,Name,ASIN,SubTyp,Variante,Lagerplatz,Bestand,BildURL\n";
         
         querySnapshot.forEach((doc) => {
             const d = doc.data();
             const row = [
-                d.timestamp, d.user, d.sku, `"${d.name || ''}"`, d.type, 
-                d.oldStock, d.newStock, d.isInventurMode ? 'JA' : 'NEIN'
+                doc.id,
+                d.type || 'produkt',
+                `"${d.name || ''}"`,
+                `"${d.asin || ''}"`,
+                `"${d.subType || ''}"`,
+                `"${d.variant || ''}"`,
+                `"${d.location || ''}"`,
+                d.stock || 0,
+                `"${d.image || ''}"`
             ].join(",");
             csvContent += row + "\n";
         });
@@ -304,7 +313,98 @@ document.getElementById('btn-export-csv').addEventListener('click', async () => 
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
-        link.setAttribute("download", "bricksplay_lager_logbuch.csv");
+        link.setAttribute("download", "bricksplay_lagerbestand.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    } catch (error) {
+        alert("Fehler beim Exportieren des Lagerbestands.");
+    }
+});
+
+// 2. CSV IMPORTIEREN (ANLEGEN & AKTUALISIEREN)
+document.getElementById('btn-import-csv').addEventListener('click', async () => {
+    const fileInput = document.getElementById('csv-file-input');
+    if (!fileInput.files.length) {
+        alert("Bitte zuerst eine CSV-Datei auswählen!");
+        return;
+    }
+
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+
+    reader.onload = async function(e) {
+        const text = e.target.result;
+        const lines = text.split("\n");
+        
+        if (lines.length < 2) {
+            alert("Die CSV-Datei ist leer oder hat das falsche Format.");
+            return;
+        }
+
+        let importedCount = 0;
+        const btn = document.getElementById('btn-import-csv');
+        btn.innerText = "Importiere...";
+        btn.disabled = true;
+
+        try {
+            // Überspringe Zeile 0 (Header)
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+
+                // Einfacher CSV Parser (berücksichtigt Anführungszeichen)
+                const regex = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
+                const cols = line.split(regex).map(val => val.replace(/^"|"$/g, '').trim());
+
+                // Spalten: SKU(0), Typ(1), Name(2), ASIN(3), SubTyp(4), Variante(5), Lagerplatz(6), Bestand(7), BildURL(8)
+                const sku = cols[0];
+                if (!sku) continue;
+
+                const itemData = {
+                    type: cols[1] || 'produkt',
+                    name: cols[2] || '',
+                    asin: cols[3] || '',
+                    subType: cols[4] || '',
+                    variant: cols[5] || '',
+                    location: cols[6] || '',
+                    stock: parseInt(cols[7] || 0),
+                    image: cols[8] || '',
+                    updatedAt: new Date().toISOString()
+                };
+
+                // In Firestore speichern (überschreibt bestehende SKUs oder legt sie neu an)
+                await setDoc(doc(db, "products", sku), itemData, { merge: true });
+                importedCount++;
+            }
+
+            alert(`Erfolgreich ${importedCount} Artikel importiert / aktualisiert!`);
+            fileInput.value = "";
+            loadDashboardData();
+        } catch (error) {
+            alert("Import-Fehler: " + error.message);
+        } finally {
+            btn.innerText = "📤 CSV-Datei hochladen & importieren";
+            btn.disabled = false;
+        }
+    };
+
+    reader.readAsText(file);
+});
+
+// HISTORIE EXPORT
+document.getElementById('btn-export-history').addEventListener('click', async () => {
+    try {
+        const querySnapshot = await getDocs(collection(db, "history"));
+        let csvContent = "data:text/csv;charset=utf-8,Datum,User,SKU,Name,Typ,Alt-Bestand,Neu-Bestand,InventurModus\n";
+        querySnapshot.forEach((doc) => {
+            const d = doc.data();
+            const row = [d.timestamp, d.user, d.sku, `"${d.name || ''}"`, d.type, d.oldStock, d.newStock, d.isInventurMode ? 'JA' : 'NEIN'].join(",");
+            csvContent += row + "\n";
+        });
+        const link = document.createElement("a");
+        link.setAttribute("href", encodeURI(csvContent));
+        link.setAttribute("download", "bricksplay_logbuch.csv");
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
